@@ -66,25 +66,27 @@ if (Test-Path -Path $destinationFile) {
     $deleteMessage = "No 1GB.bin file existed at destination."
 }
 
-# Function to download the file with progress
+# Load System.Net.Http assembly
+Add-Type -AssemblyName System.Net.Http
+
+# Function to download the file with progress using HttpClient
 function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
-    $httpClient = New-Object System.Net.Http.HttpClient
-
+    
+    $httpClient = [System.Net.Http.HttpClient]::new()
+    
     try {
-        # Start the asynchronous request
-        $response = $httpClient.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-
+        $response = $httpClient.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        
         if ($response.IsSuccessStatusCode) {
-            # Open the destination file for writing
-            $fileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
-            $stream = $response.Content.ReadAsStreamAsync().Result
+            $totalSize = $response.Content.Headers.ContentLength
             $totalRead = 0
-            $buffer = New-Object byte[] 8192
-            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -ne 0) {
+            $stream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+            $fileStream = [System.IO.File]::Create($DestinationPath)
+            $buffer = New-Object Byte[] 8192
+            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
                 $fileStream.Write($buffer, 0, $read)
                 $totalRead += $read
-                $totalSize = $response.Content.Headers.ContentLength
                 $percentComplete = ($totalRead / $totalSize) * 100
                 Write-Progress -Activity "Downloading" -Status "Progress: $percentComplete%" -PercentComplete $percentComplete
             }
@@ -100,7 +102,6 @@ function Download-FileWithProgress {
         $httpClient.Dispose()
     }
 }
-
 
 # Check if the file exists at the source
 if (-Not (Test-Path -Path $sourceFile)) {
