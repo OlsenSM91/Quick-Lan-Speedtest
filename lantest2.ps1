@@ -1,4 +1,4 @@
-# Display ASCII art
+# Display ASCII art and version info
 Write-Host "
 .____                    _________                        .______________              __   
 |    |   _____    ____  /   _____/_____   ____   ____   __| _/\__    ___/___   _______/  |_ 
@@ -9,10 +9,9 @@ Write-Host "
 
 Version: 0.1
 Author: Steven Olsen
-Company: Computer Networking Solutions
+Company: Computer Networking Solutions Inc.
 
-Description: Perform simple LAN Speed Test to troubleshoot networking issues
-
+Description: Performs simple LAN Speed Test to troubleshoot local area networking issues
 "
 
 # Function to get and display network shares
@@ -102,6 +101,10 @@ $start = Get-Date
 
 # Copy the file with progress
 try {
+    if (-Not (Test-Path -Path $sourceFile)) {
+        throw "Source file does not exist at the path: $sourceFile"
+    }
+
     $stream = [System.IO.File]::OpenRead($sourceFile)
     $fileSize = $stream.Length
     $buffer = New-Object byte[] 10MB
