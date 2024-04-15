@@ -99,6 +99,9 @@ if (-Not (Test-Path -Path $destinationDirectory)) {
 # Measure start time
 $start = Get-Date
 
+# Initialize errorMessage to null each time to avoid stale error data
+$errorMessage = $null
+
 # Copy the file with progress
 try {
     if (-Not (Test-Path -Path $sourceFile)) {
@@ -106,20 +109,26 @@ try {
     }
 
     $stream = [System.IO.File]::OpenRead($sourceFile)
-    $fileSize = $stream.Length
-    $buffer = New-Object byte[] 10MB
-    $writeStream = [System.IO.File]::Create($destinationFile)
-    $totalRead = 0
-    do {
-        $read = $stream.Read($buffer, 0, $buffer.Length)
-        $writeStream.Write($buffer, 0, $read)
-        $totalRead += $read
-        $percentComplete = ($totalRead / $fileSize) * 100
-        Write-Progress -Activity "Copying file" -Status "$percentComplete%" -PercentComplete $percentComplete
-    } while ($read -ne 0)
-    $writeStream.Close()
-    $stream.Close()
-    $copyMessage = "File copied successfully."
+    if ($stream) {
+        $fileSize = $stream.Length
+        $buffer = New-Object byte[] 10MB
+        $writeStream = [System.IO.File]::Create($destinationFile)
+        $totalRead = 0
+
+        do {
+            $read = $stream.Read($buffer, 0, $buffer.Length)
+            $writeStream.Write($buffer, 0, $read)
+            $totalRead += $read
+            $percentComplete = ($totalRead / $fileSize) * 100
+            Write-Progress -Activity "Copying file" -Status "$percentComplete%" -PercentComplete $percentComplete
+        } while ($read -ne 0)
+
+        $writeStream.Close()
+        $stream.Close()
+        $copyMessage = "File copied successfully."
+    } else {
+        throw "Failed to open the source file stream."
+    }
 } catch {
     $errorMessage = $_.Exception.Message
     $copyMessage = "Error copying file: $errorMessage"
@@ -135,9 +144,7 @@ $fileSizeMB = $fileSize / 1MB  # Size in MB
 # Calculate speed in MB/s
 $speed = $fileSizeMB / $duration.TotalSeconds
 
-# Log results
-$logFileName = "lantest_results-$(Get-Date -Format 'yyyy.MM.dd-HH.mm').log"
-$logFilePath = Join-Path -Path $destinationDirectory -ChildPath $logFileName
+# Prepare log content
 $logContent = @"
 Date: $(Get-Date)
 Selected source directory: $sourceDirectory
@@ -147,9 +154,15 @@ $copyMessage
 Time taken: $duration
 Transfer speed: $speed MB/s
 "@
+
+# Add error message to log only if it exists
 if ($errorMessage) {
     $logContent += "Error: $errorMessage`r`n"
 }
+
+# Log results
+$logFileName = "lantest_results-$(Get-Date -Format 'yyyy.MM.dd-HH.mm').log"
+$logFilePath = Join-Path -Path $destinationDirectory -ChildPath $logFileName
 $logContent | Out-File -FilePath $logFilePath -Append
 
 # Output log file path
