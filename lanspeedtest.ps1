@@ -6,6 +6,14 @@ $destinationDirectory = Read-Host "Enter the destination location (example: C:\C
 $sourceFile = Join-Path -Path $sourceDirectory -ChildPath "1GB.bin"
 $destinationFile = Join-Path -Path $destinationDirectory -ChildPath "1GB.bin"
 
+# Check and delete the file at destination if it exists
+if (Test-Path -Path $destinationFile) {
+    Remove-Item -Path $destinationFile
+    $deleteMessage = "1GB.bin file existed at destination and was deleted."
+} else {
+    $deleteMessage = "No 1GB.bin file existed at destination."
+}
+
 # Function to download the file with progress
 function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
@@ -26,7 +34,9 @@ if (-Not (Test-Path -Path $sourceFile)) {
     Write-Host "1GB.bin file not found at source. Downloading from the web..."
     $url = "https://ash-speed.hetzner.com/1GB.bin"
     Download-FileWithProgress -Url $url -DestinationPath $sourceFile
-    Write-Host "Download complete."
+    $downloadMessage = "1GB.bin file was downloaded from the web."
+} else {
+    $downloadMessage = "1GB.bin file found at source."
 }
 
 # Ensure the destination directory exists
@@ -38,20 +48,26 @@ if (-Not (Test-Path -Path $destinationDirectory)) {
 $start = Get-Date
 
 # Copy the file with progress
-$stream = [System.IO.File]::OpenRead($sourceFile)
-$fileSize = $stream.Length
-$buffer = New-Object byte[] 10MB
-$writeStream = [System.IO.File]::Create($destinationFile)
-$totalRead = 0
-do {
-    $read = $stream.Read($buffer, 0, $buffer.Length)
-    $writeStream.Write($buffer, 0, $read)
-    $totalRead += $read
-    $percentComplete = ($totalRead / $fileSize) * 100
-    Write-Progress -Activity "Copying file" -Status "$percentComplete%" -PercentComplete $percentComplete
-} while ($read -ne 0)
-$writeStream.Close()
-$stream.Close()
+try {
+    $stream = [System.IO.File]::OpenRead($sourceFile)
+    $fileSize = $stream.Length
+    $buffer = New-Object byte[] 10MB
+    $writeStream = [System.IO.File]::Create($destinationFile)
+    $totalRead = 0
+    do {
+        $read = $stream.Read($buffer, 0, $buffer.Length)
+        $writeStream.Write($buffer, 0, $read)
+        $totalRead += $read
+        $percentComplete = ($totalRead / $fileSize) * 100
+        Write-Progress -Activity "Copying file" -Status "$percentComplete%" -PercentComplete $percentComplete
+    } while ($read -ne 0)
+    $writeStream.Close()
+    $stream.Close()
+    $copyMessage = "File copied successfully."
+} catch {
+    $errorMessage = $_.Exception.Message
+    $copyMessage = "Error copying file: $errorMessage"
+}
 
 # Measure end time
 $end = Get-Date
@@ -63,17 +79,21 @@ $fileSizeMB = $fileSize / 1MB  # Size in MB
 # Calculate speed in MB/s
 $speed = $fileSizeMB / $duration.TotalSeconds
 
-# Output results
-$results = @"
-Time taken: $duration
-Transfer speed: $speed MB/s
-"@ 
-Write-Host $results
-
 # Log results
 $logFileName = "lantest_results-$(Get-Date -Format 'yyyy.MM.dd-HH.mm').log"
 $logFilePath = Join-Path -Path $destinationDirectory -ChildPath $logFileName
-$results | Out-File -FilePath $logFilePath -Append
+$logContent = @"
+Date: $(Get-Date)
+$deleteMessage
+$downloadMessage
+$copyMessage
+Time taken: $duration
+Transfer speed: $speed MB/s
+"@
+if ($errorMessage) {
+    $logContent += "Error: $errorMessage`r`n"
+}
+$logContent | Out-File -FilePath $logFilePath -Append
 
 # Output log file path
 Write-Host "Results logged to: $logFilePath"
