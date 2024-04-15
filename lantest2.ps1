@@ -1,3 +1,13 @@
+# Display ASCII art
+Write-Host "
+ ____________ _________________.__        _____        _______         
+/_   \_____  \\_____  \______  \  |__    /  |  |___  __\   _  \_______ 
+ |   | _(__  <  _(__  <   /    /  |  \  /   |  |\  \/  /  /_\  \_  __ \
+ |   |/       \/       \ /    /|   Y  \/    ^   />    <\  \_/   \  | \/
+ |___/______  /______  //____/ |___|  /\____   |/__/\_ \\_____  /__|   
+            \/       \/             \/      |__|      \/      \/       
+"
+
 # Function to get and display network shares
 function Get-NetworkShares {
     $netShares = @()
@@ -6,9 +16,9 @@ function Get-NetworkShares {
         $sharesLines = $sharesOutput -split '\r?\n' | Where-Object { $_ -match '^\s*OK\s+' }
         $i = 0
         foreach ($line in $sharesLines) {
-            if ($line -match '\\\\[^\\]+\\[^\\]+') {
+            if ($line -match '\\\\[^\\]+\S*') {
                 $i++
-                $share = $matches[0]
+                $share = $matches[0].Trim()
                 Write-Host "$i. $share"
                 $netShares += $share
             }
@@ -16,6 +26,7 @@ function Get-NetworkShares {
     } catch {
         Write-Host "Failed to retrieve network shares: $($_.Exception.Message)"
     }
+    $netShares += "Enter manual"
     return $netShares
 }
 
@@ -25,12 +36,16 @@ if ($availableShares.Count -eq 0) {
     Write-Host "No network shares available. Please ensure you are connected to the network."
     exit
 }
-$sourceIndex = Read-Host "Enter the number of the source share to use"
-if ($sourceIndex -lt 1 -or $sourceIndex -gt $availableShares.Count) {
+$sourceIndex = Read-Host "Enter the number of the source share to use or type 'Enter manual' to specify manually"
+if ($sourceIndex -eq "Enter manual") {
+    $sourceDirectory = Read-Host "Enter the manual source location (example: \\SERVER\Share)"
+} elseif ($sourceIndex -lt 1 -or $sourceIndex -gt $availableShares.Count) {
     Write-Host "Invalid selection. Exiting script."
     exit
+} else {
+    $sourceDirectory = $availableShares[$sourceIndex - 1]
 }
-$sourceDirectory = $availableShares[$sourceIndex - 1]
+
 $destinationDirectory = Read-Host "Enter the destination location (example: C:\CNS4U)"
 
 # Construct the file paths
