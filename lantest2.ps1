@@ -69,16 +69,38 @@ if (Test-Path -Path $destinationFile) {
 # Function to download the file with progress
 function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
-    $webClient = New-Object System.Net.WebClient
-    $webClient.DownloadProgressChanged += {
-        Write-Progress -Activity "Downloading" -Status "$($_.ProgressPercentage)%" -PercentComplete $_.ProgressPercentage
+    $httpClient = New-Object System.Net.Http.HttpClient
+
+    try {
+        # Start the asynchronous request
+        $response = $httpClient.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+
+        if ($response.IsSuccessStatusCode) {
+            # Open the destination file for writing
+            $fileStream = [System.IO.FileStream]::new($DestinationPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+            $stream = $response.Content.ReadAsStreamAsync().Result
+            $totalRead = 0
+            $buffer = New-Object byte[] 8192
+            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -ne 0) {
+                $fileStream.Write($buffer, 0, $read)
+                $totalRead += $read
+                $totalSize = $response.Content.Headers.ContentLength
+                $percentComplete = ($totalRead / $totalSize) * 100
+                Write-Progress -Activity "Downloading" -Status "Progress: $percentComplete%" -PercentComplete $percentComplete
+            }
+            $fileStream.Close()
+            $stream.Close()
+            Write-Host "Download complete."
+        } else {
+            Write-Host "Failed to download file. Status: $($response.StatusCode)"
+        }
+    } catch {
+        Write-Host "An error occurred: $($_.Exception.Message)"
+    } finally {
+        $httpClient.Dispose()
     }
-    $webClient.DownloadFileCompleted += {
-        Write-Progress -Activity "Downloading" -Completed
-    }
-    $webClient.DownloadFileAsync((New-Object Uri $Url), $DestinationPath)
-    while ($webClient.IsBusy) { Start-Sleep -Seconds 1 }
 }
+
 
 # Check if the file exists at the source
 if (-Not (Test-Path -Path $sourceFile)) {
