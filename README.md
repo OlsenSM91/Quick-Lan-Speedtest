@@ -31,6 +31,9 @@ irm https://raw.githubusercontent.com/OlsenSM91/Quick-Lan-Speedtest/main/lanspee
 
 Upon running, the script will prompt you to enter the accessible server share path and then the local destination directory. Follow the on-screen instructions to complete the speed test.
 
+## Note
+lantest2.ps1 is just a more refined version with additional error handling and will also utilize the net use command to obtain the existing shares on the workstation for easy selectability
+
 ## Conclusion
 
 This script provides an easy and effective way to measure the speed of your LAN by transferring a test file from a network share to your local machine. It ensures robust handling of common scenarios like missing files and provides clear progress updates, making it suitable for both casual users and network administrators.
