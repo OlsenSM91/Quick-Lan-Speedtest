@@ -74,37 +74,37 @@ function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
     $webClient = New-Object System.Net.WebClient
 
-    # Event for tracking progress.
-    $webClient.DownloadProgressChanged += {
-        param($sender, $e)
-        Write-Progress -Activity "Downloading" -Status "Downloaded $($e.BytesReceived) of $($e.TotalBytesToReceive) bytes" -PercentComplete $e.ProgressPercentage
-    }
-
-    # Event for completion.
-    $webClient.DownloadFileCompleted += {
-        param($sender, $e)
-        if ($e.Cancelled) {
-            Write-Host "Download cancelled."
-        } elseif ($e.Error) {
-            Write-Host "Error during download: $($e.Error.Message)"
-        } else {
-            Write-Host "Download completed successfully."
+    try {
+        $webClient.DownloadProgressChanged += {
+            param($sender, $e)
+            Write-Progress -Activity "Downloading" -Status "Downloaded $($e.BytesReceived) of $($e.TotalBytesToReceive) bytes" -PercentComplete $e.ProgressPercentage
         }
-        Write-Progress -Activity "Downloading" -Status "Completed" -Completed
-        $webClient.Dispose()
+    } catch {
+        Write-Host "Could not subscribe to DownloadProgressChanged event."
     }
 
     try {
-        $uri = New-Object System.Uri($Url)
-        $webClient.DownloadFileAsync($uri, $DestinationPath)
-        while ($webClient.IsBusy) {
-            Start-Sleep -Milliseconds 500
+        $webClient.DownloadFileCompleted += {
+            param($sender, $e)
+            Write-Progress -Activity "Downloading" -Status "Completed" -Completed
+            Write-Host "Download completed."
         }
     } catch {
-        Write-Host "An error occurred during download: $_"
-        $webClient.Dispose()
+        Write-Host "Could not subscribe to DownloadFileCompleted event."
     }
+
+    try {
+        $webClient.DownloadFileAsync((New-Object System.Uri($Url)), $DestinationPath)
+    } catch {
+        Write-Host "An error occurred starting the download: $_"
+    }
+
+    while ($webClient.IsBusy) {
+        Start-Sleep -Milliseconds 500
+    }
+    $webClient.Dispose()
 }
+
 # Check if the file exists at the source
 if (-Not (Test-Path -Path $sourceFile)) {
     # File does not exist, download it
