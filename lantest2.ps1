@@ -74,28 +74,37 @@ function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
     $webClient = New-Object System.Net.WebClient
 
-    # Attach event handlers directly rather than using Register-ObjectEvent to see if this handles better in the console
-    $webClient.Add_DownloadProgressChanged({
+    # Event for tracking progress.
+    $webClient.DownloadProgressChanged += {
         param($sender, $e)
         Write-Progress -Activity "Downloading" -Status "Downloaded $($e.BytesReceived) of $($e.TotalBytesToReceive) bytes" -PercentComplete $e.ProgressPercentage
-    })
+    }
 
-    $webClient.Add_DownloadFileCompleted({
+    # Event for completion.
+    $webClient.DownloadFileCompleted += {
         param($sender, $e)
+        if ($e.Cancelled) {
+            Write-Host "Download cancelled."
+        } elseif ($e.Error) {
+            Write-Host "Error during download: $($e.Error.Message)"
+        } else {
+            Write-Host "Download completed successfully."
+        }
         Write-Progress -Activity "Downloading" -Status "Completed" -Completed
-        Write-Host "Download completed."
-        $webClient.Dispose()  # Ensure the WebClient is disposed after completing the download
-    })
+        $webClient.Dispose()
+    }
 
-    # Start the asynchronous download
-    $webClient.DownloadFileAsync((New-Object Uri $Url), $DestinationPath)
-
-    # Wait for the download to complete
-    while ($webClient.IsBusy) {
-        Start-Sleep -Milliseconds 100
+    try {
+        $uri = New-Object System.Uri($Url)
+        $webClient.DownloadFileAsync($uri, $DestinationPath)
+        while ($webClient.IsBusy) {
+            Start-Sleep -Milliseconds 500
+        }
+    } catch {
+        Write-Host "An error occurred during download: $_"
+        $webClient.Dispose()
     }
 }
-
 # Check if the file exists at the source
 if (-Not (Test-Path -Path $sourceFile)) {
     # File does not exist, download it
