@@ -14,6 +14,9 @@ Company: Computer Networking Solutions Inc.
 Description: Performs simple LAN Speed Test to troubleshoot local area networking issues
 "
 
+# Reset $errorMessage at the beginning of the script
+$errorMessage = $null
+
 function Get-NetworkShares {
     $netShares = @()
     try {
