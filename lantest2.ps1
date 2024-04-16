@@ -121,7 +121,7 @@ Time taken: $duration
 Transfer speed: $speed MB/s
 "@
 if ($errorMessage) {
-    $logContent += "Error: $errorMessage`r`n"
+    $logContent += "`r`n Error: $errorMessage`r`n"
 }
 
 $logFileName = "lantest_results-$(Get-Date -Format 'yyyy.MM.dd-HH.mm').log"
