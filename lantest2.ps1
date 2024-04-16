@@ -14,7 +14,6 @@ Company: Computer Networking Solutions Inc.
 Description: Performs simple LAN Speed Test to troubleshoot local area networking issues
 "
 
-# Function to get and display network shares
 function Get-NetworkShares {
     $netShares = @()
     try {
@@ -36,7 +35,6 @@ function Get-NetworkShares {
     return $netShares
 }
 
-# Get list of shares and allow user to choose
 $availableShares = Get-NetworkShares
 if ($availableShares.Count -eq 0) {
     Write-Host "No network shares available. Please ensure you are connected to the network."
@@ -53,12 +51,9 @@ if ($sourceIndex -eq "Enter manual") {
 }
 
 $destinationDirectory = Read-Host "Enter the destination location (example: C:\CNS4U)"
-
-# Construct the file paths
 $sourceFile = Join-Path -Path $sourceDirectory -ChildPath "1GB.bin"
 $destinationFile = Join-Path -Path $destinationDirectory -ChildPath "1GB.bin"
 
-# Check and delete the file at destination if it exists
 if (Test-Path -Path $destinationFile) {
     Remove-Item -Path $destinationFile
     $deleteMessage = "1GB.bin file existed at destination and was deleted."
@@ -66,45 +61,13 @@ if (Test-Path -Path $destinationFile) {
     $deleteMessage = "No 1GB.bin file existed at destination."
 }
 
-# Load System.Net.Http assembly
-Add-Type -AssemblyName System.Net.Http
-
-# Function to download the file with progress using HttpClient
 function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
-    
-    try {
-        # Start the request and specify the response action
-        $response = Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -PassThru -Verbose
-        
-        # Stream the response, updating progress as we go
-        $totalLength = $response.ContentLength
-        $length = 0
-        $responseStream = $response.GetResponseStream()
-        $buffer = New-Object byte[] 10KB
-        $fileStream = [System.IO.File]::Create($DestinationPath)
-
-        do {
-            $readLength = $responseStream.Read($buffer, 0, $buffer.Length)
-            $fileStream.Write($buffer, 0, $readLength)
-            $length += $readLength
-            $percentComplete = ($length / $totalLength) * 100
-            Write-Progress -Activity "Downloading" -Status "$($Url) `n $length of $totalLength bytes" -PercentComplete $percentComplete
-        }
-        while ($readLength -ne 0)
-
-        $fileStream.Close()
-        $responseStream.Close()
-
-        Write-Host "Download completed successfully."
-    } catch {
-        Write-Host "Error occurred: $_"
-    }
+    Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -UseBasicParsing
+    Write-Host "Download completed successfully to $DestinationPath."
 }
 
-# Check if the file exists at the source
 if (-Not (Test-Path -Path $sourceFile)) {
-    # File does not exist, download it
     Write-Host "1GB.bin file not found at source. Downloading from the web..."
     $url = "https://ash-speed.hetzner.com/1GB.bin"
     Download-FileWithProgress -Url $url -DestinationPath $sourceFile
@@ -113,60 +76,41 @@ if (-Not (Test-Path -Path $sourceFile)) {
     $downloadMessage = "1GB.bin file found at source."
 }
 
-# Ensure the destination directory exists
 if (-Not (Test-Path -Path $destinationDirectory)) {
     New-Item -ItemType Directory -Path $destinationDirectory
 }
 
-# Measure start time
 $start = Get-Date
 
-# Initialize errorMessage to null each time to avoid stale error data
-$errorMessage = $null
-
-# Copy the file with progress
 try {
     if (-Not (Test-Path -Path $sourceFile)) {
         throw "Source file does not exist at the path: $sourceFile"
     }
-
     $stream = [System.IO.File]::OpenRead($sourceFile)
-    if ($stream) {
-        $fileSize = $stream.Length
-        $buffer = New-Object byte[] 10MB
-        $writeStream = [System.IO.File]::Create($destinationFile)
-        $totalRead = 0
-
-        do {
-            $read = $stream.Read($buffer, 0, $buffer.Length)
-            $writeStream.Write($buffer, 0, $read)
-            $totalRead += $read
-            $percentComplete = ($totalRead / $fileSize) * 100
-            Write-Progress -Activity "Copying file" -Status "$percentComplete%" -PercentComplete $percentComplete
-        } while ($read -ne 0)
-
-        $writeStream.Close()
-        $stream.Close()
-        $copyMessage = "File copied successfully."
-    } else {
-        throw "Failed to open the source file stream."
-    }
+    $fileSize = $stream.Length
+    $buffer = New-Object byte[] 10MB
+    $writeStream = [System.IO.File]::Create($destinationFile)
+    $totalRead = 0
+    do {
+        $read = $stream.Read($buffer, 0, $buffer.Length)
+        $writeStream.Write($buffer, 0, $read)
+        $totalRead += $read
+        $percentComplete = ($totalRead / $fileSize) * 100
+        Write-Progress -Activity "Copying file" -Status "$percentComplete%" -PercentComplete $percentComplete
+    } while ($read -ne 0)
+    $writeStream.Close()
+    $stream.Close()
+    $copyMessage = "File copied successfully."
 } catch {
     $errorMessage = $_.Exception.Message
     $copyMessage = "Error copying file: $errorMessage"
 }
 
-# Measure end time
 $end = Get-Date
-
-# Calculate duration
 $duration = $end - $start
-$fileSizeMB = $fileSize / 1MB  # Size in MB
-
-# Calculate speed in MB/s
+$fileSizeMB = $fileSize / 1MB
 $speed = $fileSizeMB / $duration.TotalSeconds
 
-# Prepare log content
 $logContent = @"
 Date: $(Get-Date)
 Selected source directory: $sourceDirectory
@@ -176,16 +120,11 @@ $copyMessage
 Time taken: $duration
 Transfer speed: $speed MB/s
 "@
-
-# Add error message to log only if it exists
 if ($errorMessage) {
     $logContent += "Error: $errorMessage`r`n"
 }
 
-# Log results
 $logFileName = "lantest_results-$(Get-Date -Format 'yyyy.MM.dd-HH.mm').log"
 $logFilePath = Join-Path -Path $destinationDirectory -ChildPath $logFileName
 $logContent | Out-File -FilePath $logFilePath -Append
-
-# Output log file path
 Write-Host "Results logged to: $logFilePath"
