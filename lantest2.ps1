@@ -72,34 +72,27 @@ Add-Type -AssemblyName System.Net.Http
 # Function to download the file with progress using HttpClient
 function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
-    
-    $httpClient = [System.Net.Http.HttpClient]::new()
-    
-    try {
-        $response = $httpClient.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
-        
-        if ($response.IsSuccessStatusCode) {
-            $totalSize = $response.Content.Headers.ContentLength
-            $totalRead = 0
-            $stream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
-            $fileStream = [System.IO.File]::Create($DestinationPath)
-            $buffer = New-Object Byte[] 8192
-            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-                $fileStream.Write($buffer, 0, $read)
-                $totalRead += $read
-                $percentComplete = ($totalRead / $totalSize) * 100
-                Write-Progress -Activity "Downloading" -Status "Progress: $percentComplete%" -PercentComplete $percentComplete
-            }
-            $fileStream.Close()
-            $stream.Close()
-            Write-Host "Download complete."
-        } else {
-            Write-Host "Failed to download file. Status: $($response.StatusCode)"
-        }
-    } catch {
-        Write-Host "An error occurred: $($_.Exception.Message)"
-    } finally {
-        $httpClient.Dispose()
+    $webClient = New-Object System.Net.WebClient
+
+    # Attach event handlers directly rather than using Register-ObjectEvent to see if this handles better in the console
+    $webClient.Add_DownloadProgressChanged({
+        param($sender, $e)
+        Write-Progress -Activity "Downloading" -Status "Downloaded $($e.BytesReceived) of $($e.TotalBytesToReceive) bytes" -PercentComplete $e.ProgressPercentage
+    })
+
+    $webClient.Add_DownloadFileCompleted({
+        param($sender, $e)
+        Write-Progress -Activity "Downloading" -Status "Completed" -Completed
+        Write-Host "Download completed."
+        $webClient.Dispose()  # Ensure the WebClient is disposed after completing the download
+    })
+
+    # Start the asynchronous download
+    $webClient.DownloadFileAsync((New-Object Uri $Url), $DestinationPath)
+
+    # Wait for the download to complete
+    while ($webClient.IsBusy) {
+        Start-Sleep -Milliseconds 100
     }
 }
 
