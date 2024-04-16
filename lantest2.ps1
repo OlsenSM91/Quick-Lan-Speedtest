@@ -72,37 +72,34 @@ Add-Type -AssemblyName System.Net.Http
 # Function to download the file with progress using HttpClient
 function Download-FileWithProgress {
     param([string]$Url, [string]$DestinationPath)
-    $webClient = New-Object System.Net.WebClient
-
+    
     try {
-        $webClient.DownloadProgressChanged += {
-            param($sender, $e)
-            Write-Progress -Activity "Downloading" -Status "Downloaded $($e.BytesReceived) of $($e.TotalBytesToReceive) bytes" -PercentComplete $e.ProgressPercentage
+        # Start the request and specify the response action
+        $response = Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -PassThru -Verbose
+        
+        # Stream the response, updating progress as we go
+        $totalLength = $response.ContentLength
+        $length = 0
+        $responseStream = $response.GetResponseStream()
+        $buffer = New-Object byte[] 10KB
+        $fileStream = [System.IO.File]::Create($DestinationPath)
+
+        do {
+            $readLength = $responseStream.Read($buffer, 0, $buffer.Length)
+            $fileStream.Write($buffer, 0, $readLength)
+            $length += $readLength
+            $percentComplete = ($length / $totalLength) * 100
+            Write-Progress -Activity "Downloading" -Status "$($Url) `n $length of $totalLength bytes" -PercentComplete $percentComplete
         }
-    } catch {
-        Write-Host "Could not subscribe to DownloadProgressChanged event."
-    }
+        while ($readLength -ne 0)
 
-    try {
-        $webClient.DownloadFileCompleted += {
-            param($sender, $e)
-            Write-Progress -Activity "Downloading" -Status "Completed" -Completed
-            Write-Host "Download completed."
-        }
-    } catch {
-        Write-Host "Could not subscribe to DownloadFileCompleted event."
-    }
+        $fileStream.Close()
+        $responseStream.Close()
 
-    try {
-        $webClient.DownloadFileAsync((New-Object System.Uri($Url)), $DestinationPath)
+        Write-Host "Download completed successfully."
     } catch {
-        Write-Host "An error occurred starting the download: $_"
+        Write-Host "Error occurred: $_"
     }
-
-    while ($webClient.IsBusy) {
-        Start-Sleep -Milliseconds 500
-    }
-    $webClient.Dispose()
 }
 
 # Check if the file exists at the source
